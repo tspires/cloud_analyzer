@@ -1,0 +1,31 @@
+# This file is for users who prefer pip over poetry
+# Generate with: poetry export -f requirements.txt --output requirements.txt
+
+# Core dependencies
+cloud-analyzer-common @ git+https://github.com/tspires/cloud_analyzer_common.git
+pydantic>=2.5.0
+boto3>=1.34.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-storage>=21.0.0
+azure-mgmt-resource>=23.0.0
+azure-identity>=1.15.0
+google-cloud-compute>=1.14.0
+google-cloud-storage>=2.13.0
+google-api-python-client>=2.100.0
+click>=8.1.7
+rich>=13.7.0
+textual>=0.47.0
+tabulate>=0.9.0
+python-dateutil>=2.8.2
+typing-extensions>=4.9.0
+cryptography>=41.0.0
+
+# Development dependencies (optional)
+pytest>=7.4.3
+pytest-asyncio>=0.21.1
+pytest-cov>=4.1.0
+black>=23.12.0
+flake8>=6.1.0
+mypy>=1.7.1
+isort>=5.13.0
+pre-commit>=3.6.0

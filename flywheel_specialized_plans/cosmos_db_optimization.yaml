@@ -1,0 +1,81 @@
+name: "Cosmos DB Cost Optimization Analysis"
+description: "Specialized analysis for Azure Cosmos DB optimization"
+variables:
+  subscription_id: ""
+  resource_group: ""
+  days_to_analyze: "30"
+  
+steps:
+  - prompt: |
+      List all Cosmos DB accounts in the subscription:
+      
+      az cosmosdb list --subscription {{subscription_id}} \
+        --query "[].{name:name, kind:kind, locations:locations[0].locationName, defaultConsistency:consistencyPolicy.defaultConsistencyLevel}"
+      
+      For each account, get:
+      1. Database and container structure
+      2. Current RU/s provisioning
+      3. Consistency level settings
+      4. Geo-replication configuration
+    description: "Discover Cosmos DB resources"
+    saveOutput: "cosmos_accounts"
+
+  - prompt: |
+      For each Cosmos DB account in: {{cosmos_accounts}}
+      
+      Analyze RU consumption:
+      1. Get RU consumption metrics:
+         az monitor metrics list \
+           --resource /subscriptions/{{subscription_id}}/resourceGroups/{{resource_group}}/providers/Microsoft.DocumentDB/databaseAccounts/ACCOUNT_NAME \
+           --metric "TotalRequestUnits" "ProvisionedThroughput" "NormalizedRUConsumption" \
+           --aggregation Total Average Maximum \
+           --start-time $(date -u -d '{{days_to_analyze}} days ago' --iso-8601) \
+           --end-time $(date -u --iso-8601)
+      
+      2. Identify patterns:
+         - Peak vs average RU consumption
+         - Time-based usage patterns
+         - Per-partition hot spots
+      
+      3. Calculate utilization percentage for each container
+    description: "Analyze RU consumption"
+    saveOutput: "ru_analysis"
+
+  - prompt: |
+      Based on RU analysis: {{ru_analysis}}
+      
+      Provide optimization recommendations:
+      
+      1. Throughput Optimizations:
+         - Switch from provisioned to serverless for containers with < 6000 RU/s average
+         - Enable autoscale for variable workloads (>50% variance between peak and average)
+         - Reduce provisioned RU/s for over-provisioned containers (utilization < 50%)
+      
+      2. Data Model Optimizations:
+         - Identify large documents that could be split
+         - Suggest partition key improvements for hot partitions
+         - Recommend TTL settings for temporal data
+      
+      3. Consistency Level Optimization:
+         - Suggest relaxing consistency where appropriate
+         - Quantify RU savings from consistency changes
+      
+      4. Regional Optimization:
+         - Identify unused read regions
+         - Suggest region consolidation opportunities
+      
+      Calculate potential monthly and annual savings for each recommendation.
+    description: "Generate Cosmos DB optimizations"
+    saveOutput: "cosmos_optimizations"
+
+  - prompt: |
+      Create implementation scripts for the optimizations in: {{cosmos_optimizations}}
+      
+      Generate Azure CLI scripts that:
+      1. Backup current configuration
+      2. Implement throughput changes
+      3. Modify consistency settings
+      4. Update autoscale settings
+      
+      Include rollback commands and validation steps.
+    description: "Generate implementation scripts"

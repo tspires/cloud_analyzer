@@ -1,0 +1,205 @@
+name: "Cloud Cost Optimization Analysis Plan"
+description: "Comprehensive cost optimization analysis for cloud services across AWS, Azure, and GCP"
+variables:
+  cloud_provider: "aws"  # Can be overridden with -v cloud_provider=azure
+  region: "us-east-1"
+  days_to_analyze: "30"
+  
+steps:
+  # Step 1: Virtual Machines / Compute Instances Analysis
+  - prompt: |
+      Analyze compute instance utilization for {{cloud_provider}} in region {{region}}.
+      
+      For AWS EC2:
+      1. List all instances: aws ec2 describe-instances --region {{region}} --query 'Reservations[*].Instances[*].[InstanceId,InstanceType,State.Name,LaunchTime]'
+      2. Get CPU metrics: aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions Name=InstanceId,Value=INSTANCE_ID --statistics Average,Maximum --start-time $(date -u -d '{{days_to_analyze}} days ago' +%Y-%m-%dT%H:%M:%S) --end-time $(date -u +%Y-%m-%dT%H:%M:%S) --period 3600
+      3. Get network metrics: aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name NetworkIn --dimensions Name=InstanceId,Value=INSTANCE_ID
+      
+      For Azure VMs:
+      1. List VMs: az vm list --query "[?location=='{{region}}'].{name:name, size:hardwareProfile.vmSize, state:powerState}"
+      2. Get metrics: az monitor metrics list --resource RESOURCE_ID --metric "Percentage CPU" --aggregation Average Maximum
+      
+      For GCP Compute:
+      1. List instances: gcloud compute instances list --filter="zone:{{region}}-a" --format="json(name,machineType,status)"
+      2. Get metrics: gcloud monitoring read 'compute.googleapis.com/instance/cpu/utilization' --filter='resource.zone="{{region}}-a"'
+      
+      Identify instances with:
+      - CPU utilization < 10% (idle)
+      - CPU utilization < 40% (rightsizing candidates)
+      - Network I/O < 1MB/hour (potentially idle)
+    description: "Analyze compute instance utilization"
+    saveOutput: "compute_analysis"
+
+  # Step 2: Storage Volumes Analysis
+  - prompt: |
+      Analyze storage volumes for {{cloud_provider}} based on these findings: {{compute_analysis}}
+      
+      For AWS EBS:
+      1. Find unattached volumes: aws ec2 describe-volumes --region {{region}} --filters "Name=status,Values=available"
+      2. Get volume metrics: aws cloudwatch get-metric-statistics --namespace AWS/EBS --metric-name VolumeReadOps
+      
+      For Azure Disks:
+      1. List unattached: az disk list --query "[?managedBy==null].{name:name, size:diskSizeGb, created:timeCreated}"
+      
+      For GCP Persistent Disks:
+      1. List unattached: gcloud compute disks list --filter="users:[] AND zone:{{region}}-a"
+      
+      Calculate potential savings from:
+      - Deleting unattached volumes older than 7 days
+      - Downsizing overprovisioned volumes
+    description: "Analyze storage volumes"
+    saveOutput: "storage_analysis"
+
+  # Step 3: Snapshot Analysis
+  - prompt: |
+      Analyze snapshots for {{cloud_provider}} considering the storage analysis: {{storage_analysis}}
+      
+      For AWS:
+      1. List snapshots: aws ec2 describe-snapshots --owner-ids self --region {{region}} --query 'Snapshots[*].[SnapshotId,StartTime,VolumeSize]'
+      2. Check AMI associations: aws ec2 describe-images --owners self --query 'Images[*].BlockDeviceMappings[*].Ebs.SnapshotId'
+      
+      For Azure:
+      1. List snapshots: az snapshot list --query "[].{name:name, created:timeCreated, size:diskSizeGb}"
+      
+      For GCP:
+      1. List snapshots: gcloud compute snapshots list --filter="creationTimestamp<$(date -d '30 days ago' --iso-8601)"
+      
+      Identify:
+      - Snapshots older than {{days_to_analyze}} days
+      - Orphaned snapshots (no associated volumes)
+      - Duplicate snapshots of same volume
+    description: "Analyze snapshots"
+    saveOutput: "snapshot_analysis"
+
+  # Step 4: Database Analysis
+  - prompt: |
+      Analyze database instances for {{cloud_provider}}:
+      
+      For AWS RDS:
+      1. List instances: aws rds describe-db-instances --region {{region}}
+      2. Get CPU metrics: aws cloudwatch get-metric-statistics --namespace AWS/RDS --metric-name CPUUtilization
+      3. Get connection metrics: aws cloudwatch get-metric-statistics --namespace AWS/RDS --metric-name DatabaseConnections
+      
+      For Azure SQL:
+      1. List databases: az sql db list --server SERVER --resource-group RG
+      2. Get DTU metrics: az monitor metrics list --resource RESOURCE_ID --metric "dtu_consumption_percent"
+      
+      For GCP Cloud SQL:
+      1. List instances: gcloud sql instances list
+      2. Get metrics: gcloud monitoring read 'cloudsql.googleapis.com/database/cpu/utilization'
+      
+      Identify databases with:
+      - CPU < 20% average utilization
+      - Connection count < 10% of max
+      - Storage utilization < 50%
+    description: "Analyze database utilization"
+    saveOutput: "database_analysis"
+
+  # Step 5: Reserved Instances / Commitments Analysis
+  - prompt: |
+      Analyze reserved instances and commitments for {{cloud_provider}}:
+      
+      For AWS:
+      1. Get RI utilization: aws ce get-reservation-utilization --time-period Start=$(date -u -d '{{days_to_analyze}} days ago' +%Y-%m-%d),End=$(date -u +%Y-%m-%d)
+      2. Get RI coverage: aws ce get-reservation-coverage --time-period Start=$(date -u -d '{{days_to_analyze}} days ago' +%Y-%m-%d),End=$(date -u +%Y-%m-%d)
+      3. Get recommendations: aws ce get-reservation-purchase-recommendation --service "Amazon Elastic Compute Cloud - Compute"
+      
+      For Azure:
+      1. List reservations: az reservations reservation list
+      2. Get utilization via REST API: az rest --method GET --uri "/providers/Microsoft.Capacity/reservationorders/{order-id}/reservations/{reservation-id}/providers/Microsoft.Consumption/reservationSummaries"
+      
+      For GCP:
+      1. List commitments: gcloud compute commitments list
+      2. Analyze billing data for commitment utilization
+      
+      Identify:
+      - Underutilized RIs (< 80% utilization)
+      - RI purchase opportunities for on-demand instances
+      - Expiring reservations within 90 days
+    description: "Analyze reserved instances"
+    saveOutput: "ri_analysis"
+
+  # Step 6: Cost Optimization Summary
+  - prompt: |
+      Based on all the analyses:
+      - Compute Analysis: {{compute_analysis}}
+      - Storage Analysis: {{storage_analysis}}
+      - Snapshot Analysis: {{snapshot_analysis}}
+      - Database Analysis: {{database_analysis}}
+      - Reserved Instances Analysis: {{ri_analysis}}
+      
+      Create a comprehensive cost optimization report that includes:
+      
+      1. Executive Summary
+         - Total potential monthly savings
+         - Total potential annual savings
+         - Number of optimization opportunities by category
+      
+      2. Quick Wins (Low effort, high impact)
+         - List top 10 immediate actions
+         - Estimated savings for each
+         - Implementation steps
+      
+      3. Strategic Optimizations (Higher effort, high impact)
+         - Reserved instance strategy
+         - Architecture changes
+         - Service migrations
+      
+      4. Risk Assessment
+         - Identify any high-risk optimizations
+         - Suggest testing procedures
+         - Rollback plans
+      
+      5. Implementation Roadmap
+         - Week 1: Quick wins
+         - Week 2-4: Medium effort items
+         - Month 2-3: Strategic changes
+      
+      Format the report in markdown with clear sections and tables where appropriate.
+    description: "Generate comprehensive optimization report"
+    saveOutput: "optimization_report"
+
+  # Step 7: Generate Implementation Scripts
+  - prompt: |
+      Based on the optimization report: {{optimization_report}}
+      
+      Generate executable scripts for the top 5 quick-win optimizations:
+      
+      1. For each optimization, create a script that:
+         - Validates current state
+         - Implements the change
+         - Verifies the change
+         - Can rollback if needed
+      
+      2. Include safety checks:
+         - Dry-run mode
+         - Confirmation prompts
+         - Backup commands where applicable
+      
+      3. Add monitoring commands to track savings
+      
+      Provide scripts for {{cloud_provider}} CLI.
+    description: "Generate implementation scripts"
+    saveOutput: "implementation_scripts"
+
+  # Step 8: Monitoring Plan
+  - prompt: |
+      Create a monitoring plan to track the optimizations from: {{optimization_report}}
+      
+      Design a dashboard that tracks:
+      1. Cost reduction metrics
+         - Daily/weekly/monthly spend trends
+         - Savings achieved vs projected
+      
+      2. Performance metrics
+         - Ensure no degradation after rightsizing
+         - Track utilization improvements
+      
+      3. Alerts to set up:
+         - Utilization dropping below thresholds
+         - Costs increasing unexpectedly
+         - Resources being created without tags
+      
+      Provide specific CloudWatch/Azure Monitor/GCP Monitoring queries and alert configurations.
+    description: "Create monitoring plan"
+    saveOutput: "monitoring_plan"

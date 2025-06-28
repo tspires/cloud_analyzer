@@ -1,0 +1,1 @@
+"""Storage check tests."""
