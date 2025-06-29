@@ -1,0 +1,8 @@
+azure-identity>=1.16.0
+azure-mgmt-monitor>=6.0.0
+azure-mgmt-sql>=3.0.0
+azure-mgmt-rdbms>=10.1.0
+azure-core>=1.29.0
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.11.0
