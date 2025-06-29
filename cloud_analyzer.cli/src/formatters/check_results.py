@@ -1,14 +1,29 @@
 """Formatters for check results."""
 
 from typing import List, Optional, Dict
+import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
-from constants import SEVERITY_STYLES
-from models import CheckResult, CheckSeverity, CloudProvider
+from models import CloudProvider
+
+# Add parent directory to path to import from cloud_analyzer.common
+sys.path.append(str(Path(__file__).parent.parent.parent.parent / 'cloud_analyzer.common' / 'src'))
+
+from models.checks import CheckResult
+
+# Define severity styles
+SEVERITY_STYLES = {
+    "critical": "bold red",
+    "high": "red",
+    "medium": "yellow",
+    "low": "blue",
+    "info": "dim",
+}
 
 
 def format_check_results(results: List[CheckResult], console: Console, config: Optional[Dict] = None, provider: Optional[CloudProvider] = None) -> None:
@@ -32,13 +47,7 @@ def format_check_results(results: List[CheckResult], console: Console, config: O
         results_by_severity[result.severity].append(result)
     
     # Display results by severity
-    severity_order = [
-        CheckSeverity.CRITICAL,
-        CheckSeverity.HIGH,
-        CheckSeverity.MEDIUM,
-        CheckSeverity.LOW,
-        CheckSeverity.INFO,
-    ]
+    severity_order = ["critical", "high", "medium", "low", "info"]
     
     for severity in severity_order:
         if severity not in results_by_severity:
@@ -48,7 +57,7 @@ def format_check_results(results: List[CheckResult], console: Console, config: O
         
         # Create table for this severity level
         table = Table(
-            title=f"{severity.value.upper() if hasattr(severity, 'value') else severity.upper()} Priority Findings ({len(severity_results)})",
+            title=f"{severity.upper()} Priority Findings ({len(severity_results)})",
             title_style=get_severity_style(severity),
         )
         
@@ -65,11 +74,11 @@ def format_check_results(results: List[CheckResult], console: Console, config: O
         for result in severity_results:
             table.add_row(
                 result.resource.name,
-                result.check_type.value if hasattr(result.check_type, 'value') else result.check_type,
+                result.resource.type.value if hasattr(result.resource.type, 'value') else str(result.resource.type),
                 result.title,
                 f"${result.monthly_savings:,.2f}",
                 f"${result.annual_savings:,.2f}",
-                result.effort_level,
+                result.effort_level.value if hasattr(result.effort_level, 'value') else str(result.effort_level),
             )
         
         console.print(table)
@@ -87,7 +96,7 @@ def format_detailed_result(result: CheckResult, console: Console, config: Option
     # Create severity indicator
     severity_color = get_severity_style(result.severity).split()[0]
     severity_text = Text(
-        f" {result.severity.value.upper() if hasattr(result.severity, 'value') else result.severity.upper()} ",
+        f" {result.severity.upper()} ",
         style=f"bold white on {severity_color}",
     )
     
@@ -102,10 +111,6 @@ def format_detailed_result(result: CheckResult, console: Console, config: Option
             identity_info = f"\n[bold]Tenant ID:[/bold] {tenant_id}"
             if subscription_ids:
                 identity_info += f"\n[bold]Subscription ID:[/bold] {subscription_ids[0]}"
-        elif provider == CloudProvider.AWS:
-            identity_info = f"\n[bold]Account ID:[/bold] {tenant_id}"
-        elif provider == CloudProvider.GCP:
-            identity_info = f"\n[bold]Project ID:[/bold] {tenant_id}"
     
     # Create main panel
     panel_content = f"""
@@ -147,6 +152,6 @@ def format_detailed_result(result: CheckResult, console: Console, config: Option
     console.print(panel)
 
 
-def get_severity_style(severity: CheckSeverity) -> str:
+def get_severity_style(severity: str) -> str:
     """Get color style for severity level."""
     return SEVERITY_STYLES.get(severity, "white")

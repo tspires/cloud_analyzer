@@ -12,9 +12,7 @@ from pydantic import BaseModel, Field
 class CloudProvider(str, Enum):
     """Supported cloud providers."""
     
-    AWS = "aws"
     AZURE = "azure"
-    GCP = "gcp"
 
 
 class ResourceType(str, Enum):

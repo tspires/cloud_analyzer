@@ -1,12 +1,18 @@
 """List available optimization checks."""
 
+import sys
+from pathlib import Path
 from typing import Optional
 
 import click
 from rich.console import Console
 from rich.table import Table
 
+# Add parent directory to path to import from cloud_analyzer.common
+sys.path.append(str(Path(__file__).parent.parent.parent.parent / 'cloud_analyzer.common' / 'src'))
+
 from checks.registry import check_registry
+from checks.register_checks import register_all_checks
 from models import CheckType, CloudProvider
 from cli_constants import (
     PROVIDER_CHOICES_WITH_ALL,
@@ -36,6 +42,9 @@ def list_checks(provider: str, check_type: Optional[str]) -> None:
     This command shows all the checks that can be run to identify
     cost optimization opportunities in your cloud infrastructure.
     """
+    # Register all checks first
+    register_all_checks()
+    
     # Get all registered checks
     all_checks = check_registry.list_all()
     

@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 @click.version_option(version=VERSION, prog_name="cloud-analyzer")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
-    """Cloud Analyzer - Multi-cloud cost optimization tool.
+    """Cloud Analyzer - Azure cloud cost optimization tool.
     
-    Analyze your cloud infrastructure across AWS, Azure, and GCP to identify
+    Analyze your Azure cloud infrastructure to identify
     cost optimization opportunities.
     """
     ctx.ensure_object(dict)

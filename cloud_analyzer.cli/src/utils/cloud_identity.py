@@ -25,21 +25,6 @@ def get_cloud_identity_info(provider: CloudProvider, config: Dict) -> Dict[str, 
         info["Tenant ID"] = provider_config.get("tenant_id", "Not configured")
         info["Subscription ID"] = provider_config.get("subscription_id", "Not configured")
         info["Environment"] = provider_config.get("cloud_environment", "Public")
-        
-    elif provider == CloudProvider.AWS:
-        info["Account ID"] = provider_config.get("account_id", "Not configured")
-        info["Region"] = provider_config.get("region", "Not configured")
-        # Check for role/profile info
-        if provider_config.get("profile"):
-            info["Profile"] = provider_config["profile"]
-        if provider_config.get("role_arn"):
-            info["Role ARN"] = provider_config["role_arn"]
-            
-    elif provider == CloudProvider.GCP:
-        info["Project ID"] = provider_config.get("project_id", "Not configured")
-        info["Region"] = provider_config.get("region", "Not configured")
-        if provider_config.get("service_account_email"):
-            info["Service Account"] = provider_config["service_account_email"]
     
     return info
 
@@ -66,9 +51,7 @@ def display_cloud_identity_panel(provider: CloudProvider, config: Dict, console:
     
     # Create panel with provider-specific color
     color_map = {
-        CloudProvider.AWS: "yellow",
-        CloudProvider.AZURE: "blue",
-        CloudProvider.GCP: "red"
+        CloudProvider.AZURE: "blue"
     }
     
     panel = Panel(
@@ -107,14 +90,6 @@ def display_multi_cloud_identity_table(config: Dict, console: Console) -> None:
                 primary = info.get("Tenant ID", "N/A")
                 secondary = info.get("Subscription ID", "N/A")
                 env = info.get("Environment", "N/A")
-            elif provider == CloudProvider.AWS:
-                primary = info.get("Account ID", "N/A")
-                secondary = info.get("Profile", info.get("Role ARN", "Default"))
-                env = info.get("Region", "N/A")
-            elif provider == CloudProvider.GCP:
-                primary = info.get("Project ID", "N/A")
-                secondary = info.get("Service Account", "Default")
-                env = info.get("Region", "N/A")
             else:
                 continue
                 
@@ -144,14 +119,5 @@ def format_identity_line(provider: CloudProvider, config: Dict) -> str:
         tenant = info.get("Tenant ID", "Unknown")
         subscription = info.get("Subscription ID", "Unknown")
         return f"Azure Tenant: {tenant} | Subscription: {subscription}"
-        
-    elif provider == CloudProvider.AWS:
-        account = info.get("Account ID", "Unknown")
-        region = info.get("Region", "Unknown")
-        return f"AWS Account: {account} | Region: {region}"
-        
-    elif provider == CloudProvider.GCP:
-        project = info.get("Project ID", "Unknown")
-        return f"GCP Project: {project}"
     
     return f"{provider.value.upper()}: Unknown"

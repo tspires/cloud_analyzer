@@ -4,11 +4,17 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Set, Tuple
 import json
 import csv
+import sys
+from pathlib import Path
 
 from rich.console import Console
 
-from models import CheckResult, CheckSeverity, CloudProvider
-from constants import SEVERITY_ORDER
+from models import CloudProvider
+
+# Add parent directory to path to import from cloud_analyzer.common
+sys.path.append(str(Path(__file__).parent.parent.parent.parent / 'cloud_analyzer.common' / 'src'))
+
+from models.checks import CheckResult
 from cli_constants import ERROR_NO_CONFIG, ERROR_NO_PROVIDER_CONFIG
 
 console = Console()
@@ -67,12 +73,14 @@ def filter_results_by_severity(
     if severity == "all":
         return results
     
-    min_severity = CheckSeverity(severity)
-    min_index = SEVERITY_ORDER.index(min_severity.value)
+    # Define severity order
+    severity_order = ["info", "low", "medium", "high", "critical"]
+    
+    min_index = severity_order.index(severity)
     
     return [
         r for r in results
-        if SEVERITY_ORDER.index(r.severity.value if hasattr(r.severity, 'value') else r.severity) >= min_index
+        if severity_order.index(r.severity) >= min_index
     ]
 
 
@@ -191,18 +199,5 @@ def get_provider_identity_info(provider: CloudProvider, config: Dict) -> Tuple[s
         if "subscription_id" in provider_config:
             subscription_ids = [provider_config["subscription_id"]]
         return tenant_id, subscription_ids
-    
-    elif provider == CloudProvider.AWS:
-        # For AWS, the account ID might be in metadata after authentication
-        account_id = provider_config.get("account_id", "Unknown")
-        regions = []
-        if "region" in provider_config:
-            regions = [provider_config["region"]]
-        return account_id, regions
-    
-    elif provider == CloudProvider.GCP:
-        # For GCP, use project ID as the primary identifier
-        project_id = provider_config.get("project_id", "Unknown")
-        return project_id, [project_id] if project_id != "Unknown" else []
     
     return "Unknown", []

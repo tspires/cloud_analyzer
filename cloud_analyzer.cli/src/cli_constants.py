@@ -6,8 +6,8 @@ from typing import List, Dict
 VERSION = "0.1.0"
 
 # Provider choices for CLI commands
-PROVIDER_CHOICES = ["aws", "azure", "gcp"]
-PROVIDER_CHOICES_WITH_ALL = ["aws", "azure", "gcp", "all"]
+PROVIDER_CHOICES = ["azure"]
+PROVIDER_CHOICES_WITH_ALL = ["azure"]
 
 # Output format choices
 OUTPUT_FORMAT_CHOICES = ["table", "json", "csv"]

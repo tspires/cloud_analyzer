@@ -1,14 +1,21 @@
 """Run a single optimization check by name."""
 
 import asyncio
+import sys
+from pathlib import Path
 from typing import Optional
 
 import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+# Add parent directory to path to import from cloud_analyzer.common
+sys.path.append(str(Path(__file__).parent.parent.parent.parent / 'cloud_analyzer.common' / 'src'))
+
 from checks.registry import check_registry
-from models import CloudProvider
+from checks.register_checks import register_all_checks
+from models.base import CloudProvider
+from providers.azure import AzureProvider
 
 from formatters.check_results import format_check_results
 from utils.config import load_config
@@ -26,7 +33,7 @@ console = Console()
 @click.argument("check_name")
 @click.option(
     "--provider",
-    type=click.Choice(["aws", "azure", "gcp"], case_sensitive=False),
+    type=click.Choice(["azure"], case_sensitive=False),
     help="Cloud provider (required if check supports multiple providers)",
 )
 @click.option(
@@ -56,7 +63,7 @@ def run_check(
     Check names can be found using the 'list-checks' command.
     
     Example:
-        cloud-analyzer run-check idle-ec2-instances --provider aws
+        cloud-analyzer run-check azure-vm-deallocated --provider azure
     """
     # Get the check from registry
     check = check_registry.get(check_name)
@@ -102,14 +109,10 @@ def run_check(
         console.print("[dim]Regions: All configured regions[/dim]")
     console.print()
     
+    # Ensure checks are registered
+    register_all_checks()
+    
     try:
-        # Validate credentials
-        with console.status(f"[bold yellow]Validating {provider.upper()} credentials...[/bold yellow]") as status:
-            # In real implementation, credentials would be validated here
-            import time
-            time.sleep(0.5)  # Simulate validation
-            console.print("✓ [green]Credentials validated[/green]")
-        
         # Run the check
         console.print(f"\n[bold yellow]Executing check '{check_name}'...[/bold yellow]")
         results = asyncio.run(
@@ -159,6 +162,17 @@ async def run_single_check(
     """
     results = []
     
+    # Create provider instance
+    provider_config = config.get(provider.value, {})
+    provider_instance = None
+    
+    if provider == CloudProvider.AZURE:
+        subscription_id = provider_config.get('subscription_id')
+        provider_instance = AzureProvider(subscription_id=subscription_id)
+    
+    if not provider_instance:
+        raise Exception(f"Provider {provider.value} not implemented")
+    
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -169,27 +183,38 @@ async def run_single_check(
             f"[cyan]Initializing {provider.value.upper()} provider...[/cyan]",
             total=None
         )
-        await asyncio.sleep(0.5)  # Simulate initialization
+        await provider_instance.initialize()
         progress.remove_task(task)
         console.print(f"  ✓ [green]{provider.value.upper()} provider initialized[/green]")
         
-        # Step 2: Discover resources
+        # Step 2: Validate credentials
         task = progress.add_task(
-            f"[cyan]Discovering resources for check '{check.name}'...[/cyan]",
+            f"[cyan]Validating credentials...[/cyan]",
             total=None
         )
-        await asyncio.sleep(1.0)  # Simulate discovery
+        if not await provider_instance.validate_credentials():
+            progress.remove_task(task)
+            raise Exception(f"Invalid {provider.value} credentials")
         progress.remove_task(task)
-        console.print(f"  ✓ [green]Resources discovered[/green]")
+        console.print(f"  ✓ [green]Credentials validated[/green]")
         
-        # Step 3: Run the check
+        # Step 3: Get resources
         task = progress.add_task(
-            f"[cyan]Analyzing resources...[/cyan]",
+            f"[cyan]Fetching resources...[/cyan]",
             total=None
         )
-        await asyncio.sleep(1.5)  # Simulate check execution
+        regions = [region] if region else None
+        resources = await provider_instance.list_resources(regions=regions)
         progress.remove_task(task)
-        console.print(f"  ✓ [green]Analysis complete[/green]")
+        console.print(f"  ✓ [green]Found {len(resources)} resources[/green]")
+        
+        # Step 4: Run the check
+        task = progress.add_task(
+            f"[cyan]Running check...[/cyan]",
+            total=None
+        )
+        results = await check.run(provider_instance, resources)
+        progress.remove_task(task)
+        console.print(f"  ✓ [green]Check complete[/green]")
     
-    # In real implementation, this would return actual results
     return results

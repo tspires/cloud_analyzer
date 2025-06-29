@@ -205,6 +205,36 @@ class AzureProvider(CloudProviderInterface):
                             }
                         ))
             
+            # List Storage Accounts
+            if not resource_types or ResourceType.BUCKET in resource_types:
+                for account in self._storage_client.storage_accounts.list():
+                    if regions and account.location not in regions:
+                        continue
+                    
+                    # Estimate monthly cost based on account type and size
+                    # This is simplified - would use metrics API for actual size
+                    monthly_cost = self._estimate_storage_account_cost(
+                        account.sku.name, account.sku.tier, account.location
+                    )
+                    
+                    resources.append(Resource(
+                        id=account.id,
+                        name=account.name,
+                        type=ResourceType.BUCKET,
+                        provider=CloudProvider.AZURE,
+                        region=account.location,
+                        state="available",
+                        monthly_cost=monthly_cost,
+                        is_active=True,
+                        tags=account.tags or {},
+                        metadata={
+                            "sku_name": account.sku.name,
+                            "sku_tier": account.sku.tier,
+                            "kind": account.kind,
+                            "access_tier": account.access_tier if hasattr(account, 'access_tier') else None,
+                        }
+                    ))
+            
         except AzureError as e:
             self.logger.error(f"Error listing Azure resources: {str(e)}")
             raise
@@ -295,6 +325,9 @@ class AzureProvider(CloudProviderInterface):
                 'avg_memory_percent': 0,
                 'max_cpu_percent': 0,
                 'max_memory_percent': 0,
+                'avg_dtu_percent': 0,
+                'max_dtu_percent': 0,
+                'cpu_variance': 0,
             }
             
             for metric_key, metric_name in metrics.items():
@@ -326,13 +359,26 @@ class AzureProvider(CloudProviderInterface):
                             if 'cpu' in metric_key and avg_values:
                                 results['avg_cpu_percent'] = sum(avg_values) / len(avg_values)
                                 results['max_cpu_percent'] = max(max_values) if max_values else 0
+                                # Calculate variance
+                                if len(avg_values) > 1:
+                                    mean = results['avg_cpu_percent']
+                                    variance = sum((x - mean) ** 2 for x in avg_values) / len(avg_values)
+                                    results['cpu_variance'] = (variance ** 0.5) / mean * 100 if mean > 0 else 0
                             elif 'memory' in metric_key and avg_values:
                                 results['avg_memory_percent'] = sum(avg_values) / len(avg_values)
                                 results['max_memory_percent'] = max(max_values) if max_values else 0
                             elif 'dtu' in metric_key and avg_values:
-                                # Map DTU to CPU for DTU-based databases
-                                results['avg_cpu_percent'] = sum(avg_values) / len(avg_values)
-                                results['max_cpu_percent'] = max(max_values) if max_values else 0
+                                # Store DTU metrics
+                                results['avg_dtu_percent'] = sum(avg_values) / len(avg_values)
+                                results['max_dtu_percent'] = max(max_values) if max_values else 0
+                                # Also map DTU to CPU for compatibility
+                                results['avg_cpu_percent'] = results['avg_dtu_percent']
+                                results['max_cpu_percent'] = results['max_dtu_percent']
+                                # Calculate variance for DTU
+                                if len(avg_values) > 1:
+                                    mean = results['avg_dtu_percent']
+                                    variance = sum((x - mean) ** 2 for x in avg_values) / len(avg_values)
+                                    results['cpu_variance'] = (variance ** 0.5) / mean * 100 if mean > 0 else 0
                 
                 except Exception as e:
                     self.logger.warning(f"Failed to get metric {metric_name}: {str(e)}")
@@ -354,6 +400,53 @@ class AzureProvider(CloudProviderInterface):
             
             db = self._sql_client.databases.get(resource_group, server_name, database_name)
             
+            # Get backup configuration
+            backup_policies = None
+            pitr_days = 7  # Default
+            try:
+                backup_policies = self._sql_client.backup_short_term_retention_policies.get(
+                    resource_group, server_name, database_name
+                )
+                pitr_days = backup_policies.retention_days if backup_policies else 7
+            except:
+                pass
+            
+            # Get LTR policies (simplified)
+            ltr_config = {
+                "weekly_retention": 0,
+                "monthly_retention": 0,
+                "yearly_retention": 0,
+            }
+            
+            # Get geo-replicas
+            geo_replicas = []
+            try:
+                replicas = self._sql_client.replication_links.list_by_database(
+                    resource_group, server_name, database_name
+                )
+                for replica in replicas:
+                    geo_replicas.append({
+                        "region": replica.partner_location,
+                        "status": replica.replication_state,
+                        "role": replica.partner_role,
+                    })
+            except:
+                pass
+            
+            # Estimate activity patterns (simplified)
+            # In production, would analyze connection metrics
+            avg_daily_active_hours = 12  # Default estimate
+            avg_daily_connections = 100
+            connection_pattern = "continuous"
+            
+            # For non-production, assume less activity
+            if db.tags:
+                env = db.tags.get("environment", "").lower()
+                if env in ["dev", "test"]:
+                    avg_daily_active_hours = 6
+                    avg_daily_connections = 10
+                    connection_pattern = "intermittent"
+            
             return {
                 "instance_type": f"{db.sku.tier}_{db.sku.name}",
                 "engine": "SQL Database",
@@ -361,6 +454,19 @@ class AzureProvider(CloudProviderInterface):
                 "allocated_storage_gb": db.max_size_bytes / (1024**3) if db.max_size_bytes else 0,
                 "multi_az": db.zone_redundant if hasattr(db, 'zone_redundant') else False,
                 "storage_type": "Premium SSD",  # Azure SQL uses premium storage
+                # Additional fields for our checks
+                "database_name": database_name,
+                "server_name": server_name,
+                "tier": db.sku.tier,
+                "sku": db.sku.name,
+                "max_size_gb": db.max_size_bytes / (1024**3) if db.max_size_bytes else 0,
+                "status": db.status,
+                "pitr_retention_days": pitr_days,
+                "ltr_config": ltr_config,
+                "geo_replicas": geo_replicas,
+                "avg_daily_active_hours": avg_daily_active_hours,
+                "avg_daily_connections": avg_daily_connections,
+                "connection_pattern": connection_pattern,
             }
         except Exception as e:
             self.logger.error(f"Error getting database info for {database_id}: {str(e)}")
@@ -662,6 +768,37 @@ class AzureProvider(CloudProviderInterface):
         
         return Decimal(str(base_prices.get(sku, 200)))
     
+    def _estimate_storage_account_cost(self, sku_name: str, sku_tier: str, region: str) -> Decimal:
+        """Estimate monthly cost for a storage account."""
+        # Base cost for storage account (simplified)
+        base_cost = Decimal("5")  # Base account cost
+        
+        # Add cost based on redundancy
+        redundancy_multipliers = {
+            "Standard_LRS": 1.0,
+            "Standard_ZRS": 1.25,
+            "Standard_GRS": 2.0,
+            "Standard_RAGRS": 2.5,
+            "Standard_GZRS": 2.5,
+            "Standard_RAGZRS": 3.125,
+            "Premium_LRS": 4.0,
+            "Premium_ZRS": 5.0,
+        }
+        
+        multiplier = redundancy_multipliers.get(sku_name, 1.0)
+        
+        # Estimate based on average usage (100GB for standard, 50GB for premium)
+        if sku_tier == "Premium":
+            estimated_gb = 50
+            cost_per_gb = Decimal("0.15")
+        else:
+            estimated_gb = 100
+            cost_per_gb = Decimal("0.02")
+        
+        storage_cost = Decimal(str(estimated_gb)) * cost_per_gb * Decimal(str(multiplier))
+        
+        return base_cost + storage_cost
+    
     def _estimate_reservation_cost(self, sku: str, region: str, term: str) -> Decimal:
         """Estimate monthly cost for a reservation."""
         # Simplified - would calculate based on VM size and term
@@ -855,3 +992,157 @@ class AzureProvider(CloudProviderInterface):
         # This would typically use the Azure Pricing API
         # For now, return the cost already set on the resource
         return float(resource.monthly_cost)
+    
+    async def get_instance_info(self, instance_id: str, region: str) -> Dict[str, Any]:
+        """Get detailed information about a VM instance."""
+        try:
+            # Extract resource group and VM name from instance ID
+            parts = instance_id.split('/')
+            resource_group = parts[4]
+            vm_name = parts[-1]
+            
+            vm = self._compute_client.virtual_machines.get(
+                resource_group, vm_name, expand='instanceView'
+            )
+            
+            # Get power state from instance view
+            power_state = "unknown"
+            state_transition_time = None
+            
+            if vm.instance_view and vm.instance_view.statuses:
+                for status in vm.instance_view.statuses:
+                    if status.code.startswith('PowerState/'):
+                        power_state = status.code.split('/')[-1]
+                        state_transition_time = status.time
+            
+            # Check for Azure Hybrid Benefit
+            license_type = vm.license_type if hasattr(vm, 'license_type') else None
+            
+            # Get priority (Regular vs Spot)
+            priority = vm.priority if hasattr(vm, 'priority') else "Regular"
+            
+            return {
+                "power_state": power_state,
+                "state_transition_time": state_transition_time,
+                "license_type": license_type,
+                "priority": priority,
+                "launch_time": vm.time_created if hasattr(vm, 'time_created') else None,
+                "vm_size": vm.hardware_profile.vm_size,
+                "os_type": vm.storage_profile.os_disk.os_type,
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting instance info for {instance_id}: {str(e)}")
+            return {}
+    
+    async def get_storage_info(self, storage_id: str, region: str) -> Dict[str, Any]:
+        """Get detailed information about a storage account."""
+        try:
+            # Extract resource group and storage account name
+            parts = storage_id.split('/')
+            resource_group = parts[4]
+            account_name = parts[-1]
+            
+            # Get storage account details
+            account = self._storage_client.storage_accounts.get_properties(
+                resource_group, account_name
+            )
+            
+            # Get account properties
+            sku_tier = account.sku.tier if account.sku else "Standard"
+            redundancy = account.sku.name if account.sku else "LRS"
+            account_kind = account.kind if hasattr(account, 'kind') else "StorageV2"
+            
+            # Get blob containers
+            containers = list(self._storage_client.blob_containers.list(
+                resource_group, account_name
+            ))
+            container_count = len(containers)
+            container_names = [c.name for c in containers]
+            
+            # Get storage metrics (simplified - would use metrics API)
+            total_size_gb = 0
+            last_modified = None
+            monthly_transactions = 0
+            
+            # Get analytics settings
+            analytics_info = {
+                "logging_enabled": False,
+                "minute_metrics_enabled": False,
+                "logging_size_gb": 0,
+                "metrics_size_gb": 0,
+                "logging_retention_days": 0,
+                "metrics_retention_days": 0,
+            }
+            
+            # Check for lifecycle policies
+            try:
+                policies = self._storage_client.management_policies.get(
+                    resource_group, account_name, "default"
+                )
+                has_lifecycle_policies = bool(policies.policy.rules)
+            except:
+                has_lifecycle_policies = False
+            
+            # Estimate tier distribution and access patterns (simplified)
+            tier_distribution = {
+                "hot": {"size_gb": total_size_gb * 0.7},
+                "cool": {"size_gb": total_size_gb * 0.2},
+                "archive": {"size_gb": total_size_gb * 0.1},
+            }
+            
+            access_patterns = {
+                "0-30": total_size_gb * 0.5,
+                "30-90": total_size_gb * 0.3,
+                "90-180": total_size_gb * 0.15,
+                "180+": total_size_gb * 0.05,
+            }
+            
+            # Performance metrics (simplified)
+            performance_metrics = {
+                "avg_iops": 100,
+                "max_iops": 500,
+                "avg_throughput_mbps": 10,
+            }
+            
+            return {
+                "sku_tier": sku_tier,
+                "redundancy": redundancy,
+                "account_kind": account_kind,
+                "total_size_gb": total_size_gb,
+                "container_count": container_count,
+                "container_names": container_names,
+                "last_modified_date": last_modified,
+                "monthly_transactions": monthly_transactions,
+                "has_lifecycle_policies": has_lifecycle_policies,
+                "tier_distribution": tier_distribution,
+                "access_patterns": access_patterns,
+                "analytics": analytics_info,
+                "performance_metrics": performance_metrics,
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting storage info for {storage_id}: {str(e)}")
+            return {}
+    
+    async def get_reserved_instances(self) -> List[Dict[str, Any]]:
+        """Get list of reserved instances/reservations."""
+        try:
+            reservations = []
+            
+            for reservation in self._reservations_client.reservation.list_all():
+                if reservation.properties.provisioning_state == "Succeeded":
+                    reservations.append({
+                        "reservation_id": reservation.name,
+                        "vm_size": reservation.sku.name,
+                        "region": reservation.location,
+                        "quantity": reservation.properties.quantity,
+                        "term": reservation.properties.term,
+                        "expiry_date": reservation.properties.expiry_date,
+                    })
+            
+            return reservations
+            
+        except Exception as e:
+            self.logger.error(f"Error getting reserved instances: {str(e)}")
+            return []

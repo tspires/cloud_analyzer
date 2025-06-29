@@ -68,7 +68,7 @@ class RightSizingCheck(Check):
     @property
     def supported_providers(self) -> Set[CloudProvider]:
         """Return set of providers this check supports."""
-        return {CloudProvider.AWS, CloudProvider.AZURE, CloudProvider.GCP}
+        return {CloudProvider.AZURE}
     
     def filter_resources(self, resources: List[Resource]) -> List[Resource]:
         """Filter to only running compute instances."""
