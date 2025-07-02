@@ -1,0 +1,48 @@
+# Azure Metrics CLI Configuration Template
+# Copy this file and customize for your environment
+
+# Azure configuration
+azure:
+  subscription_id: ""  # Your Azure subscription ID
+  tenant_id: ""        # Azure AD tenant ID (optional for service principal auth)
+  client_id: ""        # Application client ID (optional for service principal auth)
+  client_secret: ""    # Client secret (optional for service principal auth)
+
+# Database configuration
+database:
+  host: "localhost"
+  port: 5432
+  database: "azure_metrics"
+  username: "postgres"
+  password: ""
+
+# Metrics collection configuration
+collection:
+  interval_minutes: 15        # Collection interval in minutes
+  retention_days: 30          # How long to keep metrics data
+  batch_size: 100            # Number of resources to process in parallel
+  parallel_workers: 4        # Number of concurrent workers
+  timeout_seconds: 300       # Timeout for individual operations
+  retry_attempts: 3          # Number of retry attempts for failed operations
+  retry_delay_seconds: 5     # Delay between retry attempts
+  enable_data_validation: true  # Enable data quality validation
+
+# Resource filtering (optional)
+resource_filters:
+  resource_groups: []        # Filter by specific resource groups
+  resource_types: []         # Filter by specific resource types
+  tags: {}                   # Filter by resource tags (key: value pairs)
+  subscriptions: []          # Filter by specific subscriptions
+
+# Logging configuration
+logging:
+  level: "INFO"              # Log level: DEBUG, INFO, WARNING, ERROR
+  format: "structured"       # Log format: structured, simple
+  file_path: ""             # Optional log file path
+
+# Performance tuning
+performance:
+  connection_pool_size: 10   # Database connection pool size
+  max_overflow: 20          # Maximum connection pool overflow
+  pool_recycle_seconds: 3600 # Connection pool recycle time
+  query_timeout_seconds: 30  # Database query timeout

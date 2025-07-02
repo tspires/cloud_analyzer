@@ -130,3 +130,70 @@ def save_config(config: Dict[str, Dict[str, str]]) -> None:
     
     # Set restrictive permissions
     config_file.chmod(FILE_PERMISSION_OWNER_RW)
+
+
+def get_config() -> Dict[str, Dict[str, str]]:
+    """Get configuration with defaults."""
+    import os
+    
+    config = load_config() or {}
+    
+    # Set default database configuration
+    if 'database' not in config:
+        config['database'] = {}
+    
+    # Allow environment variable overrides for database
+    db_env_mapping = {
+        'host': 'DB_HOST',
+        'port': 'DB_PORT', 
+        'database': 'DB_DATABASE',
+        'username': 'DB_USERNAME',
+        'password': 'DB_PASSWORD'
+    }
+    
+    db_defaults = {
+        'host': 'localhost',
+        'port': '5432',
+        'database': 'azure_metrics',
+        'username': 'postgres',
+        'password': ''
+    }
+    
+    for config_key, env_key in db_env_mapping.items():
+        env_value = os.getenv(env_key)
+        if env_value:
+            config['database'][config_key] = env_value
+        elif config_key not in config['database']:
+            config['database'][config_key] = db_defaults[config_key]
+    
+    return config
+
+
+def get_azure_credentials(config: Dict[str, Dict[str, str]]) -> Dict[str, str]:
+    """Get Azure credentials from configuration."""
+    import os
+    
+    azure_config = config.get('azure', {})
+    
+    # Allow environment variable overrides
+    env_mapping = {
+        'subscription_id': 'AZURE_SUBSCRIPTION_ID',
+        'tenant_id': 'AZURE_TENANT_ID',
+        'client_id': 'AZURE_CLIENT_ID',
+        'client_secret': 'AZURE_CLIENT_SECRET'
+    }
+    
+    for config_key, env_key in env_mapping.items():
+        env_value = os.getenv(env_key)
+        if env_value:
+            azure_config[config_key] = env_value
+    
+    if not azure_config:
+        raise ValueError("Azure configuration not found. Please run 'cloud-analyzer configure' first or set environment variables.")
+    
+    required_fields = ['subscription_id']
+    for field in required_fields:
+        if field not in azure_config or not azure_config[field]:
+            raise ValueError(f"Missing required Azure configuration: {field}")
+    
+    return azure_config

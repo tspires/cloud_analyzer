@@ -1,0 +1,281 @@
+# Azure Resource Type Definitions
+# This file defines the Azure resource types supported for metrics collection
+
+resource_types:
+  # Compute resources
+  virtual_machines:
+    type: "Microsoft.Compute/virtualMachines"
+    display_name: "Virtual Machines"
+    description: "Azure Virtual Machines"
+    metrics:
+      - name: "Percentage CPU"
+        unit: "Percent"
+        aggregations: ["Average", "Maximum"]
+      - name: "Network In Total"
+        unit: "Bytes"
+        aggregations: ["Total"]
+      - name: "Network Out Total"
+        unit: "Bytes"
+        aggregations: ["Total"]
+      - name: "Disk Read Bytes"
+        unit: "Bytes"
+        aggregations: ["Total"]
+      - name: "Disk Write Bytes"
+        unit: "Bytes"
+        aggregations: ["Total"]
+      - name: "Disk Read Operations/Sec"
+        unit: "CountPerSecond"
+        aggregations: ["Average"]
+      - name: "Disk Write Operations/Sec"
+        unit: "CountPerSecond"
+        aggregations: ["Average"]
+
+  vm_scale_sets:
+    type: "Microsoft.Compute/virtualMachineScaleSets"
+    display_name: "VM Scale Sets"
+    description: "Azure Virtual Machine Scale Sets"
+    metrics:
+      - name: "Percentage CPU"
+        unit: "Percent"
+        aggregations: ["Average", "Maximum"]
+      - name: "Network In Total"
+        unit: "Bytes"
+        aggregations: ["Total"]
+      - name: "Network Out Total"
+        unit: "Bytes"
+        aggregations: ["Total"]
+
+  # Web and mobile
+  app_services:
+    type: "Microsoft.Web/sites"
+    display_name: "App Services"
+    description: "Azure App Service web apps"
+    metrics:
+      - name: "Requests"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Response Time"
+        unit: "Seconds"
+        aggregations: ["Average"]
+      - name: "Http Server Errors"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Http Client Errors"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Memory Percentage"
+        unit: "Percent"
+        aggregations: ["Average"]
+      - name: "CPU Time"
+        unit: "Seconds"
+        aggregations: ["Total"]
+
+  function_apps:
+    type: "Microsoft.Web/sites"  # Functions use same type as App Service
+    display_name: "Function Apps"
+    description: "Azure Function Apps"
+    filters:
+      kind: "functionapp"
+    metrics:
+      - name: "Function Execution Count"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Function Execution Units"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Memory Percentage"
+        unit: "Percent"
+        aggregations: ["Average"]
+
+  # Databases
+  sql_databases:
+    type: "Microsoft.Sql/servers/databases"
+    display_name: "SQL Databases"
+    description: "Azure SQL Database"
+    metrics:
+      - name: "DTU Consumption Percent"
+        unit: "Percent"
+        aggregations: ["Average", "Maximum"]
+      - name: "Connection Successful"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Connection Failed"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Database Size"
+        unit: "Bytes"
+        aggregations: ["Maximum"]
+      - name: "CPU Percent"
+        unit: "Percent"
+        aggregations: ["Average"]
+
+  mysql_servers:
+    type: "Microsoft.DBforMySQL/servers"
+    display_name: "MySQL Servers"
+    description: "Azure Database for MySQL"
+    metrics:
+      - name: "CPU Percent"
+        unit: "Percent"
+        aggregations: ["Average", "Maximum"]
+      - name: "Memory Percent"
+        unit: "Percent"
+        aggregations: ["Average", "Maximum"]
+      - name: "Storage Percent"
+        unit: "Percent"
+        aggregations: ["Average"]
+      - name: "Connections"
+        unit: "Count"
+        aggregations: ["Total"]
+
+  postgresql_servers:
+    type: "Microsoft.DBforPostgreSQL/servers"
+    display_name: "PostgreSQL Servers"
+    description: "Azure Database for PostgreSQL"
+    metrics:
+      - name: "CPU Percent"
+        unit: "Percent"
+        aggregations: ["Average", "Maximum"]
+      - name: "Memory Percent"
+        unit: "Percent"
+        aggregations: ["Average", "Maximum"]
+      - name: "Storage Percent"
+        unit: "Percent"
+        aggregations: ["Average"]
+      - name: "Connections"
+        unit: "Count"
+        aggregations: ["Total"]
+
+  cosmos_db:
+    type: "Microsoft.DocumentDB/databaseAccounts"
+    display_name: "Cosmos DB"
+    description: "Azure Cosmos DB"
+    metrics:
+      - name: "Total Request Units"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Available Storage"
+        unit: "Bytes"
+        aggregations: ["Total"]
+      - name: "Data Size"
+        unit: "Bytes"
+        aggregations: ["Total"]
+      - name: "Document Count"
+        unit: "Count"
+        aggregations: ["Total"]
+
+  # Storage
+  storage_accounts:
+    type: "Microsoft.Storage/storageAccounts"
+    display_name: "Storage Accounts"
+    description: "Azure Storage Accounts"
+    metrics:
+      - name: "Used Capacity"
+        unit: "Bytes"
+        aggregations: ["Average"]
+      - name: "Transactions"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Availability"
+        unit: "Percent"
+        aggregations: ["Average"]
+      - name: "Success Server Latency"
+        unit: "Milliseconds"
+        aggregations: ["Average"]
+      - name: "Success E2E Latency"
+        unit: "Milliseconds"
+        aggregations: ["Average"]
+
+  # Networking
+  load_balancers:
+    type: "Microsoft.Network/loadBalancers"
+    display_name: "Load Balancers"
+    description: "Azure Load Balancers"
+    metrics:
+      - name: "Data Path Availability"
+        unit: "Percent"
+        aggregations: ["Average"]
+      - name: "Health Probe Status"
+        unit: "Percent"
+        aggregations: ["Average"]
+      - name: "Byte Count"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Packet Count"
+        unit: "Count"
+        aggregations: ["Total"]
+
+  # Security and management
+  key_vaults:
+    type: "Microsoft.KeyVault/vaults"
+    display_name: "Key Vaults"
+    description: "Azure Key Vault"
+    metrics:
+      - name: "Service API Hits"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Service API Latency"
+        unit: "Milliseconds"
+        aggregations: ["Average"]
+      - name: "Service API Result"
+        unit: "Count"
+        aggregations: ["Total"]
+      - name: "Availability"
+        unit: "Percent"
+        aggregations: ["Average"]
+
+  # Monitoring and management
+  application_insights:
+    type: "Microsoft.Insights/components"
+    display_name: "Application Insights"
+    description: "Azure Application Insights"
+    metrics:
+      - name: "Request Rate"
+        unit: "CountPerSecond"
+        aggregations: ["Average"]
+      - name: "Request Duration"
+        unit: "Milliseconds"
+        aggregations: ["Average"]
+      - name: "Failed Request Rate"
+        unit: "CountPerSecond"
+        aggregations: ["Average"]
+      - name: "Exception Rate"
+        unit: "CountPerSecond"
+        aggregations: ["Average"]
+      - name: "Page View Count"
+        unit: "Count"
+        aggregations: ["Total"]
+
+# Collection intervals by resource type (in minutes)
+collection_intervals:
+  default: 15
+  "Microsoft.Compute/virtualMachines": 5
+  "Microsoft.Web/sites": 5
+  "Microsoft.Sql/servers/databases": 15
+  "Microsoft.Storage/storageAccounts": 60
+  "Microsoft.Insights/components": 5
+  "Microsoft.Network/loadBalancers": 15
+  "Microsoft.KeyVault/vaults": 60
+  "Microsoft.DocumentDB/databaseAccounts": 15
+
+# Retention policies by resource type (in days)
+retention_policies:
+  default: 30
+  "Microsoft.Compute/virtualMachines": 90
+  "Microsoft.Web/sites": 90
+  "Microsoft.Sql/servers/databases": 90
+  "Microsoft.Storage/storageAccounts": 30
+  "Microsoft.Insights/components": 90
+  "Microsoft.Network/loadBalancers": 30
+  "Microsoft.KeyVault/vaults": 30
+  "Microsoft.DocumentDB/databaseAccounts": 90
+
+# Priority for collection (1=highest, 5=lowest)
+collection_priorities:
+  "Microsoft.Compute/virtualMachines": 1
+  "Microsoft.Web/sites": 1
+  "Microsoft.Sql/servers/databases": 2
+  "Microsoft.DocumentDB/databaseAccounts": 2
+  "Microsoft.Storage/storageAccounts": 3
+  "Microsoft.Network/loadBalancers": 3
+  "Microsoft.KeyVault/vaults": 4
+  "Microsoft.Insights/components": 2

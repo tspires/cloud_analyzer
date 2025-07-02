@@ -6,7 +6,7 @@ import sys
 import click
 from rich.console import Console
 
-from commands import analyze, auth_status, configure, list_checks, report, run_check
+from commands import analyze, auth_status, configure, list_checks, report, run_check, metrics, setup_db
 from cli_constants import (
     VERSION,
     EXIT_SUCCESS,
@@ -40,6 +40,8 @@ cli.add_command(analyze.analyze)
 cli.add_command(list_checks.list_checks)
 cli.add_command(report.report)
 cli.add_command(run_check.run_check)
+cli.add_command(metrics.metrics)
+cli.add_command(setup_db.setup_db)
 
 
 def main() -> None:
