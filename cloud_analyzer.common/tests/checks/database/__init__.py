@@ -1,1 +1,0 @@
-"""Database check tests."""
